@@ -1,0 +1,51 @@
+---
+- name: Setup Kubernetes Cluster
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install Docker
+      apt:
+        name: docker.io
+        state: latest
+        update_cache: yes
+
+    - name: Install apt-transport-https, curl
+      apt:
+        name:
+          - apt-transport-https
+          - curl
+        state: latest
+
+    - name: Add Kubernetes apt repository
+      apt_repository:
+        repo: deb https://apt.kubernetes.io/ kubernetes-jammy main
+        filename: kubernetes
+
+    - name: Install Kubernetes components
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: latest
+
+    - name: Initialize the Kubernetes cluster
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16
+      when: inventory_hostname == groups['masters'][0]
+
+    - name: Set up kubeconfig for local user
+      become: no
+      block:
+        - name: Create .kube directory
+          file:
+            path: "{{ ansible_env.HOME }}/.kube"
+            state: directory
+            mode: 0755
+
+        - name: Copy admin.conf to user's kube config
+          copy:
+            src: "/etc/kubernetes/admin.conf"
+            dest: "{{ ansible_env.HOME }}/.kube/config"
+            remote_src: yes
+            owner: "{{ ansible_user }}"
+            mode: 0644
